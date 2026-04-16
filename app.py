@@ -12,7 +12,7 @@ current_player = ""
 
 def get_dominant_color(url):
     try:
-        if not url: return "#888888"
+        if not url: return {"dark": "#888888", "light": "#666666"}
         img = None
         if url.startswith('file://'):
             path = urllib.parse.unquote(url.replace('file://', ''))
@@ -43,35 +43,24 @@ def get_dominant_color(url):
             r, g, b = [v/255.0 for v in best]
             h, l, s = colorsys.rgb_to_hls(r, g, b)
             
-            # AMOLED/Darkでも沈まないよう輝度を補正
-            if l < 0.5: l = 0.6 
-            if s < 0.3: s = 0.5 
+            # ダークモード用：沈まないように明るさを底上げ
+            l_d = max(l, 0.6)
+            s_d = max(s, 0.5)
             
-            nr, ng, nb = colorsys.hls_to_rgb(h, l, s)
-            return '#{:02x}{:02x}{:02x}'.format(int(nr*255), int(ng*255), int(nb*255))
+            # ライトモード用：ハレーション防止（明度と彩度を適度に抑える）
+            l_l = min(l, 0.45) if l > 0.6 else l
+            s_l = min(s, 0.6)
+            
+            def to_hex(h, l, s):
+                nr, ng, nb = colorsys.hls_to_rgb(h, l, s)
+                return '#{:02x}{:02x}{:02x}'.format(int(nr*255), int(ng*255), int(nb*255))
+
+            return {"dark": to_hex(h, l_d, s_d), "light": to_hex(h, l_l, s_l)}
     except: pass
-    return "#888888"
+    return {"dark": "#888888", "light": "#666666"}
 
 @app.route('/')
 def index(): return render_template('index.html')
-
-@app.route('/test_color')
-def test_color():
-    global current_player
-    p = current_player
-    art_url = run_playerctl(["metadata", "mpris:artUrl"], p)
-    accent = get_dominant_color(art_url)
-    return f"""
-    <body style="background:{accent};margin:0;display:flex;justify-content:center;align-items:center;height:100vh;font-family:sans-serif;">
-        <div style="background:white;padding:30px;border-radius:20px;text-align:center;">
-            <h1>Color Debugger</h1>
-            <p>HEX: <b>{accent}</b></p>
-            <img src="{art_url.replace('file://','')}" style="width:200px;border-radius:10px;border:3px solid #ccc;">
-            <br><br><button onclick="location.reload()">REFRESH</button>
-            <p><a href="/">Back to Home</a></p>
-        </div>
-    </body>
-    """
 
 @app.route('/api/metadata')
 def get_metadata():
@@ -80,16 +69,16 @@ def get_metadata():
     players = [x for x in run_playerctl(["-l"]).split('\n') if x]
     try:
         art_url = run_playerctl(["metadata", "mpris:artUrl"], p)
-        accent = get_dominant_color(art_url)
+        accents = get_dominant_color(art_url)
         vol_raw = run_playerctl(["volume"], p)
         volume = float(vol_raw) if vol_raw else 0.0
         pos = float(run_playerctl(["position"], p) or 0)
         length = float(run_playerctl(["metadata", "mpris:length"], p) or 0) / 1000000
-    except: accent, volume, pos, length = "#888888", 0.0, 0, 0
+    except: accents, volume, pos, length = {"dark":"#888888","light":"#666666"}, 0.0, 0, 0
     return jsonify({
         "title": run_playerctl(["metadata", "xesam:title"], p) or "No Media",
         "artist": run_playerctl(["metadata", "xesam:artist"], p) or "-",
-        "art_url": art_url, "accent_color": accent,
+        "art_url": art_url, "accent_dark": accents["dark"], "accent_light": accents["light"],
         "status": run_playerctl(["status"], p), "position": pos, "length": length,
         "volume": volume, "shuffle": run_playerctl(["shuffle"], p) == "On",
         "loop": run_playerctl(["loop"], p), "players": players, "active_player": p or "Auto Select"
