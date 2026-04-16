@@ -19,7 +19,10 @@
         h1 { font-size: 2.2rem; }
         .artist { color: var(--dim); font-size: 1.3rem; margin-top: 5px; margin-bottom: 20px; }
         .bar-bg { width: 100%; height: var(--bar-h); background: var(--panel); border-radius: 10px; cursor: pointer; margin-bottom: 5px; }
-        .bar-fill { height: 100%; background: var(--accent); width: 0%; border-radius: 10px; transition: width 0.15s linear, background-color 0.8s ease; }
+        
+        /* 1秒更新に合わせて transition を 1s linear に設定し、ヌルヌル動かす */
+        .bar-fill { height: 100%; background: var(--accent); width: 0%; border-radius: 10px; transition: width 1s linear, background-color 0.8s ease; }
+        
         .ctrl-row { display: flex; align-items: center; gap: 15px; margin: 20px 0; }
         .btn { background: var(--panel); border: none; color: var(--text); border-radius: 50%; width: 55px; height: 55px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
         .btn-l { width: 75px; height: 75px; color: var(--accent); transition: color 0.8s ease; }
@@ -86,6 +89,14 @@
             try {
                 const res = await fetch('/api/metadata');
                 const d = await res.json();
+                
+                // 再生状態が変わった時は transition を一時的に無効にしてパッと切り替える（オプション）
+                if (lastData && lastData.title !== d.title) {
+                    document.getElementById('seek-fill').style.transition = 'none';
+                } else {
+                    document.getElementById('seek-fill').style.transition = 'width 1s linear, background-color 0.8s ease';
+                }
+
                 lastData = d;
                 applyAccentColor();
 
@@ -142,7 +153,8 @@
         document.getElementById('seek-bg').onclick = (e) => { const r = e.currentTarget.getBoundingClientRect(); control(`seek?offset=${((e.clientX - r.left) / r.width) * duration}`); };
         document.addEventListener('keydown', (e) => { if(e.key.toLowerCase()==='f') toggleFS(); });
         
-        setInterval(update, 2000); setInterval(clock, 1000); setInterval(updateBatt, 10000);
+        // 更新間隔を 1000ms (1秒) に変更
+        setInterval(update, 1000); setInterval(clock, 1000); setInterval(updateBatt, 10000);
         update(); clock(); updateBatt();
     </script>
 </body>
